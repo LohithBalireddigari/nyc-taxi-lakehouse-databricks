@@ -1,0 +1,21 @@
+{
+  "name": "nyc-taxi-dlt",
+  "edition": "ADVANCED",
+  "channel": "CURRENT",
+  "photon": false,
+  "target": "nyc_taxi_dlt",
+  "continuous": false,
+  "development": true,
+  "libraries": [
+    { "notebook": { "path": "/Repos/<user>/nyc-taxi-lakehouse-databricks/dlt/taxi_dlt_pipeline" } }
+  ],
+  "configuration": {
+    "taxi.raw_path": "dbfs:/FileStore/nyc_taxi/raw"
+  },
+  "clusters": [
+    {
+      "label": "default",
+      "autoscale": { "min_workers": 1, "max_workers": 3, "mode": "ENHANCED" }
+    }
+  ]
+}

@@ -1,0 +1,67 @@
+# dbx deployment: `dbx deploy nyc-taxi-lakehouse --assets-only` then `dbx launch nyc-taxi-lakehouse --from-assets`
+custom:
+  cluster: &cluster
+    new_cluster:
+      spark_version: "12.0.x-scala2.12"
+      node_type_id: "i3.xlarge"
+      num_workers: 2
+      spark_conf:
+        spark.sql.session.timeZone: "UTC"
+        spark.databricks.delta.optimizeWrite.enabled: "true"
+        spark.databricks.delta.autoCompact.enabled: "true"
+
+  ml_cluster: &ml_cluster
+    new_cluster:
+      spark_version: "12.0.x-cpu-ml-scala2.12"
+      node_type_id: "i3.xlarge"
+      num_workers: 2
+      spark_conf:
+        spark.sql.session.timeZone: "UTC"
+
+  notebook_base: &base
+    base_parameters:
+      root: "dbfs:/FileStore/nyc_taxi"
+
+environments:
+  default:
+    workflows:
+      - name: "nyc-taxi-lakehouse"
+        schedule:
+          quartz_cron_expression: "0 30 5 * * ?"
+          timezone_id: "America/New_York"
+          pause_status: "PAUSED"
+        email_notifications:
+          on_failure: []
+        job_clusters:
+          - job_cluster_key: "etl"
+            <<: *cluster
+          - job_cluster_key: "ml"
+            <<: *ml_cluster
+        tasks:
+          - task_key: "bronze_autoloader"
+            job_cluster_key: "etl"
+            notebook_task: { notebook_path: "notebooks/01_bronze_autoloader", <<: *base }
+          - task_key: "silver_trips"
+            job_cluster_key: "etl"
+            depends_on: [{ task_key: "bronze_autoloader" }]
+            notebook_task: { notebook_path: "notebooks/02_silver_trips", <<: *base }
+          - task_key: "scd2_drivers"
+            job_cluster_key: "etl"
+            depends_on: [{ task_key: "bronze_autoloader" }]
+            notebook_task: { notebook_path: "notebooks/03_scd2_drivers", <<: *base }
+          - task_key: "gold_star_schema"
+            job_cluster_key: "etl"
+            depends_on: [{ task_key: "silver_trips" }, { task_key: "scd2_drivers" }]
+            notebook_task: { notebook_path: "notebooks/04_gold_star_schema", <<: *base }
+          - task_key: "streaming_zone_demand"
+            job_cluster_key: "etl"
+            depends_on: [{ task_key: "silver_trips" }]
+            notebook_task: { notebook_path: "notebooks/05_streaming_zone_demand", <<: *base }
+          - task_key: "demand_forecast"
+            job_cluster_key: "ml"
+            depends_on: [{ task_key: "gold_star_schema" }]
+            notebook_task: { notebook_path: "notebooks/06_demand_forecast_mlflow", <<: *base }
+          - task_key: "data_quality_gate"
+            job_cluster_key: "etl"
+            depends_on: [{ task_key: "gold_star_schema" }]
+            notebook_task: { notebook_path: "notebooks/07_data_quality", <<: *base }
