@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.9"   # Python version on DBR 12.0
+          cache: pip
+      - uses: actions/setup-java@v3
+        with:
+          distribution: temurin
+          java-version: "11"
+      - name: Install
+        run: pip install pyspark==3.3.1 numpy==1.21.5 pytest==7.2.0
+      - name: Unit tests
+        run: pytest -q
+      - name: End-to-end smoke run
+        run: |
+          PYTHONPATH=src python -m taxi_lakehouse.data_generator --output data/raw --trips 8000
+          PYTHONPATH=src python -m taxi_lakehouse.pipeline --local --cutoff "2022-12-15 00:00:00"
